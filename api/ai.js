@@ -1,57 +1,127 @@
-const ai = require('unlimited-ai');
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 
-// List of available models (converted to a Set for faster lookup)
-const models = new Set([
-  'gpt-4o-mini-free', 'gpt-4o-mini', 'gpt-4o-free', 'gpt-4-turbo-2024-04-09',
-  'gpt-4o-2024-08-06', 'grok-2', 'grok-2-mini', 'claude-3-opus-20240229',
-  'claude-3-opus-20240229-gcp', 'claude-3-sonnet-20240229', 'claude-3-5-sonnet-20240620',
-  'claude-3-haiku-20240307', 'claude-2.1', 'gemini-1.5-flash-exp-0827', 'gemini-1.5-pro-exp-0827'
-]);
+const chatHistoryDir = 'groqllama70b';
 
 exports.config = {
-  name: 'ai',
-  author: 'Lance Cochangco',
-  description: 'Advanced API for dynamic text generation using various AI models',
-  method: 'get',
-  category: 'ai',
-  link: ['/ai']
+    name: "ai",
+    version: "2.0.0",
+    author: "Clarence",
+    description: "Generate responses based on user input using GPT AI (with memory).",
+    method: 'get',
+    link: [`/ai?q=Hello&id=12`],
+    guide: "ai How does quantum computing work?",
+    category: "ai"
 };
 
-exports.initialize = async function ({ req, res }) {
-  const { model, system, question } = req.query;
+exports.initialize = async ({ req, res, font }) => {
+    const query = req.query.q;
+    const userId = req.query.id;
 
-  if (!model || !system || !question) {
-    return res.status(400).json({
-      error: "Missing required parameters",
-      message: "Please provide all required query parameters: 'model', 'system', and 'question'.",
-      availableModels: Array.from(models),
-      exampleUsage: "/ai?model=gpt-4-turbo-2024-04-09&system=You%20are%20a%20helpful%20assistant&question=Hello"
-    });
-  }
+    if (!userId) {
+        return res.status(400).json({ error: "Missing required parameter: id" });
+    }
 
-  if (!models.has(model)) {
-    return res.status(400).json({
-      error: "Invalid model selection",
-      message: `The model '${model}' is not supported. Please select from the available models.`,
-      availableModels: Array.from(models)
-    });
-  }
+    if (!query) {
+        return res.status(400).json({ error: "No prompt provided" });
+    }
 
-  try {
+    // Clear chat history if requested
+    if (query.toLowerCase() === 'clear') {
+        clearChatHistory(userId);
+        return res.json({ message: "Chat history cleared!" });
+    }
+
+    // Load existing chat memory
+    const chatHistory = loadChatHistory(userId);
+
+    // Construct messages (system + previous chat + new user query)
+    const systemPrompt = `Your name is ClarenceAi, developed by "French Clarence Mangigo". You mainly speak English but can also respond in Tagalog or Bisaya.`;
     const messages = [
-      { role: 'system', content: system },
-      { role: 'user', content: question }
+        { role: "system", content: systemPrompt },
+        ...chatHistory,
+        { role: "user", content: query }
     ];
 
-    const chat = await ai.generate(model, messages);
+    // API setup
+    const baseUrl = "https://api.deepenglish.com/api/gpt_open_ai/chatnew";
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Content-Type': 'application/json',
+        'Origin': 'https://members.deepenglish.com',
+        'Referer': 'https://members.deepenglish.com/',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Authorization': 'Bearer UFkOfJaclj61OxoD7MnQknU1S2XwNdXMuSZA+EZGLkc='
+    };
 
-    res.status(200).json({ success: true, model, system, question, response: chat });
-  } catch (error) {
-    console.error("Error in AI response generation:", error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      message: "An unexpected error occurred during AI response generation. Please try again later or contact our support team.",
-      errorDetails: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
+    const body = {
+        messages: messages,
+        projectName: "wordpress",
+        temperature: 0.9
+    };
+
+    try {
+        const response = await axios.post(baseUrl, body, { headers });
+        let answer = "No response received.";
+
+        if (response.data && response.data.success) {
+            answer = response.data.message;
+        } else if (response.data.message) {
+            answer = response.data.message;
+        }
+
+        // Save chat history (append)
+        appendToChatHistory(userId, [
+            { role: "user", content: query },
+            { role: "assistant", content: answer }
+        ]);
+
+        res.json({
+            response: answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)),
+            author: exports.config.author
+        });
+
+    } catch (error) {
+        console.error("Error while contacting AI API:", error.message);
+        res.status(500).json({ error: "Failed to fetch AI response." });
+    }
 };
+
+// =========================
+// MEMORY MANAGEMENT SYSTEM
+// =========================
+function loadChatHistory(uid) {
+    const file = path.join(chatHistoryDir, `memory_${uid}.json`);
+    try {
+        if (fs.existsSync(file)) {
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+        }
+        return [];
+    } catch (err) {
+        console.error("Error loading memory:", err);
+        return [];
+    }
+}
+
+function appendToChatHistory(uid, newEntries) {
+    const file = path.join(chatHistoryDir, `memory_${uid}.json`);
+    try {
+        if (!fs.existsSync(chatHistoryDir)) fs.mkdirSync(chatHistoryDir);
+        const history = loadChatHistory(uid);
+        const updated = [...history, ...newEntries];
+        fs.writeFileSync(file, JSON.stringify(updated, null, 2));
+    } catch (err) {
+        console.error("Error saving memory:", err);
+    }
+}
+
+function clearChatHistory(uid) {
+    const file = path.join(chatHistoryDir, `memory_${uid}.json`);
+    try {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+    } catch (err) {
+        console.error("Error clearing memory:", err);
+    }
+}
