@@ -72,7 +72,7 @@ exports.initialize = async ({ req, res, font }) => {
 
         res.json({
             status: status,
-            response: font ? answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)) : answer,
+            reply: font ? answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)) : answer,
             author: exports.config.author
         });
 
