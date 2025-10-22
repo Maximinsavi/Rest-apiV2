@@ -20,17 +20,17 @@ exports.initialize = async ({ req, res, font }) => {
     const userId = req.query.id;
 
     if (!userId) {
-        return res.status(400).json({ error: "Missing required parameter: id" });
+        return res.status(400).json({ status: false, error: "Missing required parameter: id" });
     }
 
     if (!query) {
-        return res.status(400).json({ error: "No prompt provided" });
+        return res.status(400).json({ status: false, error: "No prompt provided" });
     }
 
     // Clear chat history if requested
     if (query.toLowerCase() === 'clear') {
         clearChatHistory(userId);
-        return res.json({ message: "Chat history cleared!" });
+        return res.json({ status: true, message: "Chat history cleared!" });
     }
 
     // Load existing chat memory
@@ -65,11 +65,14 @@ exports.initialize = async ({ req, res, font }) => {
     try {
         const response = await axios.post(baseUrl, body, { headers });
         let answer = "No response received.";
+        let status = false;
 
         if (response.data && response.data.success) {
             answer = response.data.message;
+            status = true;
         } else if (response.data.message) {
             answer = response.data.message;
+            status = false;
         }
 
         // Save chat history (append)
@@ -79,13 +82,17 @@ exports.initialize = async ({ req, res, font }) => {
         ]);
 
         res.json({
+            status: status,
             response: answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)),
             author: exports.config.author
         });
 
     } catch (error) {
         console.error("Error while contacting AI API:", error.message);
-        res.status(500).json({ error: "Failed to fetch AI response." });
+        res.status(500).json({
+            status: false,
+            error: "Failed to fetch AI response."
+        });
     }
 };
 
