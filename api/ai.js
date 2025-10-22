@@ -36,7 +36,7 @@ exports.initialize = async ({ req, res, font }) => {
     // Chargement de l'historique
     const chatHistory = loadChatHistory(userId);
 
-    const systemPrompt = `Your name is ClarenceAi, developed by "French Clarence Mangigo". You mainly speak English but can also respond in Tagalog or Bisaya.`;
+    const systemPrompt = `Your name is MaxChat, developed by "Maximin SAVI". You mainly speak English but can also respond in Tagalog or Bisaya.`;
     const messages = [
         { role: "system", content: systemPrompt },
         ...chatHistory,
