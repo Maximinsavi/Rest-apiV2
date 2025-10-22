@@ -7,7 +7,7 @@ const chatHistoryDir = 'groqllama70b';
 exports.config = {
     name: "ai",
     version: "2.0.0",
-    author: "Clarence",
+    author: "Maximin",
     description: "Generate responses based on user input using GPT AI (with memory).",
     method: 'get',
     link: [`/ai?q=Hello&id=12`],
@@ -19,24 +19,23 @@ exports.initialize = async ({ req, res, font }) => {
     const query = req.query.q;
     const userId = req.query.id;
 
+    // Vérification des paramètres
     if (!userId) {
         return res.status(400).json({ status: false, error: "Missing required parameter: id" });
     }
-
     if (!query) {
         return res.status(400).json({ status: false, error: "No prompt provided" });
     }
 
-    // Clear chat history if requested
+    // Clear chat history
     if (query.toLowerCase() === 'clear') {
         clearChatHistory(userId);
         return res.json({ status: true, message: "Chat history cleared!" });
     }
 
-    // Load existing chat memory
+    // Chargement de l'historique
     const chatHistory = loadChatHistory(userId);
 
-    // Construct messages (system + previous chat + new user query)
     const systemPrompt = `Your name is ClarenceAi, developed by "French Clarence Mangigo". You mainly speak English but can also respond in Tagalog or Bisaya.`;
     const messages = [
         { role: "system", content: systemPrompt },
@@ -44,23 +43,14 @@ exports.initialize = async ({ req, res, font }) => {
         { role: "user", content: query }
     ];
 
-    // API setup
     const baseUrl = "https://api.deepenglish.com/api/gpt_open_ai/chatnew";
     const headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'User-Agent': 'Mozilla/5.0',
         'Content-Type': 'application/json',
-        'Origin': 'https://members.deepenglish.com',
-        'Referer': 'https://members.deepenglish.com/',
-        'Accept-Language': 'en-US,en;q=0.9',
         'Authorization': 'Bearer UFkOfJaclj61OxoD7MnQknU1S2XwNdXMuSZA+EZGLkc='
     };
 
-    const body = {
-        messages: messages,
-        projectName: "wordpress",
-        temperature: 0.9
-    };
+    const body = { messages, projectName: "wordpress", temperature: 0.9 };
 
     try {
         const response = await axios.post(baseUrl, body, { headers });
@@ -68,14 +58,13 @@ exports.initialize = async ({ req, res, font }) => {
         let status = false;
 
         if (response.data && response.data.success) {
-            answer = response.data.message;
+            answer = response.data.message || answer;
             status = true;
         } else if (response.data.message) {
             answer = response.data.message;
             status = false;
         }
 
-        // Save chat history (append)
         appendToChatHistory(userId, [
             { role: "user", content: query },
             { role: "assistant", content: answer }
@@ -83,52 +72,32 @@ exports.initialize = async ({ req, res, font }) => {
 
         res.json({
             status: status,
-            response: answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)),
+            response: font ? answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)) : answer,
             author: exports.config.author
         });
 
     } catch (error) {
         console.error("Error while contacting AI API:", error.message);
-        res.status(500).json({
-            status: false,
-            error: "Failed to fetch AI response."
-        });
+        res.status(500).json({ status: false, error: "Failed to fetch AI response." });
     }
 };
 
-// =========================
-// MEMORY MANAGEMENT SYSTEM
-// =========================
+// ===== MEMORY SYSTEM =====
 function loadChatHistory(uid) {
     const file = path.join(chatHistoryDir, `memory_${uid}.json`);
-    try {
-        if (fs.existsSync(file)) {
-            return JSON.parse(fs.readFileSync(file, 'utf8'));
-        }
-        return [];
-    } catch (err) {
-        console.error("Error loading memory:", err);
-        return [];
-    }
+    if (!fs.existsSync(file)) return [];
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch (e) { console.error(e); return []; }
 }
 
 function appendToChatHistory(uid, newEntries) {
+    if (!fs.existsSync(chatHistoryDir)) fs.mkdirSync(chatHistoryDir);
     const file = path.join(chatHistoryDir, `memory_${uid}.json`);
-    try {
-        if (!fs.existsSync(chatHistoryDir)) fs.mkdirSync(chatHistoryDir);
-        const history = loadChatHistory(uid);
-        const updated = [...history, ...newEntries];
-        fs.writeFileSync(file, JSON.stringify(updated, null, 2));
-    } catch (err) {
-        console.error("Error saving memory:", err);
-    }
+    const history = loadChatHistory(uid);
+    fs.writeFileSync(file, JSON.stringify([...history, ...newEntries], null, 2));
 }
 
 function clearChatHistory(uid) {
     const file = path.join(chatHistoryDir, `memory_${uid}.json`);
-    try {
-        if (fs.existsSync(file)) fs.unlinkSync(file);
-    } catch (err) {
-        console.error("Error clearing memory:", err);
-    }
+    if (fs.existsSync(file)) fs.unlinkSync(file);
 }
