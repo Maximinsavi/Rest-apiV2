@@ -26,13 +26,13 @@ exports.initialize = async ({ req, res, font }) => {
         return res.status(400).json({ status: false, error: "No prompt provided" });
     }
 
-    // Clear chat history
+    // Effacer l'historique
     if (query.toLowerCase() === 'clear') {
         clearChatHistory(userId);
         return res.json({ status: true, message: "Chat history cleared!" });
     }
 
-    // Chargement de l'historique
+    // Charger historique
     const chatHistory = loadChatHistory(userId);
 
     const systemPrompt = `Your name is MaxChat, developed by "Maximin SAVI". You mainly speak English but can also respond in Tagalog or Bisaya.`;
@@ -64,13 +64,13 @@ exports.initialize = async ({ req, res, font }) => {
             status = false;
         }
 
-        // On sauvegarde la nouvelle question/réponse
+        // Sauvegarde du nouvel échange
         appendToChatHistory(userId, [
             { role: "user", content: query },
             { role: "assistant", content: answer }
         ]);
 
-        // On recharge pour voir les dernières 10 conversations
+        // On recharge les 10 dernières conversations
         const updatedHistory = loadChatHistory(userId);
         const pairs = [];
 
@@ -83,19 +83,20 @@ exports.initialize = async ({ req, res, font }) => {
             if (pairs.length >= 10) break;
         }
 
-        let formatted = `Status: ${status}\n`;
-        pairs.forEach((p, index) => {
-            const num = pairs.length - index;
-            formatted += `\nQuestion-${num}: ${p.question}\nRéponse-${num}: ${p.reponse}\n`;
-        });
+        // Création d’un objet avec question1, question2, etc.
+        const historyObject = {};
+        for (let i = 0; i < pairs.length; i++) {
+            const num = pairs.length - i;
+            historyObject[`question${num}`] = pairs[i].question;
+            historyObject[`reponse${num}`] = pairs[i].reponse;
+        }
 
-        // Résultat complet
+        // Résultat final
         res.json({
             status,
             reply: font ? answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)) : answer,
             author: exports.config.author,
-            history: pairs,
-            formatted
+            history: [historyObject]
         });
 
     } catch (error) {
