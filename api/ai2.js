@@ -6,7 +6,7 @@ exports.config = {
     author: "Clarence",
     description: "Generate responses based on user input using GPT AI.",
     method: 'get',
-    link: [`/gptChat?q=`],
+    link: [`/ai2?q=`],
     guide: "ai How does quantum computing work?",
     category: "ai"
 };
