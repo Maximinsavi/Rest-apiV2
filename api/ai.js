@@ -74,21 +74,24 @@ exports.initialize = async ({ req, res, font }) => {
         const updatedHistory = loadChatHistory(userId);
         const pairs = [];
 
+        // Parcours depuis la fin : on prend paires (user, assistant)
         for (let i = updatedHistory.length - 2; i >= 0; i -= 2) {
             const userMsg = updatedHistory[i];
             const botMsg = updatedHistory[i + 1];
             if (userMsg && botMsg && userMsg.role === "user" && botMsg.role === "assistant") {
+                // pairs[0] = la plus récente
                 pairs.push({ question: userMsg.content, reponse: botMsg.content });
             }
             if (pairs.length >= 10) break;
         }
 
-        // Création d’un objet avec question1, question2, etc.
+        // --- CORRECTION IMPORTANTE ---
+        // Nous voulons: question1 = la plus récente, question2 = l'avant-dernière, ...
         const historyObject = {};
         for (let i = 0; i < pairs.length; i++) {
-            const num = pairs.length - i;
-            historyObject[`question${num}`] = pairs[i].question;
-            historyObject[`reponse${num}`] = pairs[i].reponse;
+            const idx = i + 1; // 1-based, 1 = plus récent
+            historyObject[`question${idx}`] = pairs[i].question;
+            historyObject[`reponse${idx}`] = pairs[i].reponse;
         }
 
         // Résultat final
