@@ -19,7 +19,6 @@ exports.initialize = async ({ req, res, font }) => {
     const query = req.query.q;
     const userId = req.query.id;
 
-    // Vérification des paramètres
     if (!userId) {
         return res.status(400).json({ status: false, error: "Missing required parameter: id" });
     }
@@ -65,15 +64,38 @@ exports.initialize = async ({ req, res, font }) => {
             status = false;
         }
 
+        // On sauvegarde la nouvelle question/réponse
         appendToChatHistory(userId, [
             { role: "user", content: query },
             { role: "assistant", content: answer }
         ]);
 
+        // On recharge pour voir les dernières 10 conversations
+        const updatedHistory = loadChatHistory(userId);
+        const pairs = [];
+
+        for (let i = updatedHistory.length - 2; i >= 0; i -= 2) {
+            const userMsg = updatedHistory[i];
+            const botMsg = updatedHistory[i + 1];
+            if (userMsg && botMsg && userMsg.role === "user" && botMsg.role === "assistant") {
+                pairs.push({ question: userMsg.content, reponse: botMsg.content });
+            }
+            if (pairs.length >= 10) break;
+        }
+
+        let formatted = `Status: ${status}\n`;
+        pairs.forEach((p, index) => {
+            const num = pairs.length - index;
+            formatted += `\nQuestion-${num}: ${p.question}\nRéponse-${num}: ${p.reponse}\n`;
+        });
+
+        // Résultat complet
         res.json({
-            status: status,
+            status,
             reply: font ? answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text)) : answer,
-            author: exports.config.author
+            author: exports.config.author,
+            history: pairs,
+            formatted
         });
 
     } catch (error) {
